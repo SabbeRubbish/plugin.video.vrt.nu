@@ -220,15 +220,16 @@ class ApiHelper:
         items = []
 
         if use_favorites:
-            favorite_programs = self._favorites.programs()
+            favorite_titles = self._favorites.titles()
 
         # Create list of oneoff programs from oneoff episodes
         oneoff_programs = [url_to_program(episode.get('programUrl')) for episode in oneoffs]
 
         for tvshow in tvshows:
             program = url_to_program(tvshow.get('programUrl'))
+            title = tvshow.get('title')
 
-            if use_favorites and program not in favorite_programs:
+            if use_favorites and title not in favorite_titles:
                 continue
 
             if program in oneoff_programs:

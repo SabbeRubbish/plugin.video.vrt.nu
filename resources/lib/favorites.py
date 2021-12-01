@@ -36,17 +36,32 @@ class Favorites:
         favorites_json = get_cache('favorites.json', ttl)
         if not favorites_json:
             from tokenresolver import TokenResolver
-            xvrttoken = TokenResolver().get_token('X-VRT-Token', variant='user')
-            if xvrttoken:
+            vrttoken = TokenResolver().get_token('vrtlogin-at', variant='roaming')
+            if vrttoken:
                 headers = {
-                    'authorization': 'Bearer ' + xvrttoken,
+                    'authorization': 'Bearer ' + vrttoken,
                     'content-type': 'application/json',
                     'Referer': 'https://www.vrt.be/vrtnu',
                 }
-                favorites_url = 'https://video-user-data.vrt.be/favorites'
-                favorites_json = get_url_json(url=favorites_url, cache='favorites.json', headers=headers)
+                favorites_url = 'https://www.vrt.be/vrtnu-api/graphql/v1'
+                from json import dumps
+                favorites_data = dict(operationName="FavoritesPage", variables='{"after": null, "pageSize": 25}', query="query FavoritesPage($pageSize: Int, $after: ID) {\n  page(id: \"custom:vrtnu-favoritePrograms\") {\n    ... on FavoritesPage {\n      title\n      components {\n        ... on PaginatedTileList {\n          __typename\n          listId\n          displayType\n          title\n          paginatedItems(first: $pageSize, after: $after) {\n            pageInfo {\n              hasNextPage\n              startCursor\n              endCursor\n              __typename\n            }\n            edges {\n              cursor\n              node {\n                __typename\n                ... on ProgramTile {\n                  id\n                  title\n                  image {\n                    objectId\n                    templateUrl\n                    __typename\n                  }\n                  available\n                  program {\n                    favorite\n                    favoriteAction {\n                      id\n                      title\n                      __typename\n                    }\n                    __typename\n                  }\n                  __typename\n                }\n              }\n              __typename\n            }\n            __typename\n          }\n        }\n        __typename\n      }\n      __typename\n    }\n    __typename\n  }\n}\n")
+                favorites_bytes = dumps(favorites_data).encode("utf-8")
+                favorites_json = get_url_json(url=favorites_url, cache=None, headers=headers,data=favorites_bytes)
+
+                # We need to convert this format 
+                # data.page.components[0].paginatedItems.edges array to 
+                # object programName -> ...
+                fetched_favorites = {}
+                for f in favorites_json["data"]["page"]["components"][0]["paginatedItems"]["edges"]:
+                    favorite_value={"adobeCloudId": '', "isFavorite": True, "programUrl": "/vrtnu/a-z/" + f["node"]["title"].lower().replace(".", "").replace(" ", "-"), "title": f["node"]["title"]}
+                    new_favorite = {"created": 0, "updated": 0, "value": favorite_value}
+                    fetched_favorites["vrtnuaz" + f["node"]["title"].lower().replace(" ", "").replace(".", "")] = (new_favorite)
+                favorites_json = fetched_favorites
         if favorites_json is not None:
+            from json import dumps
             self._data = favorites_json
+            update_cache('favorites.json', dumps(self._data))
 
     def update(self, program, title, value=True):
         """Set a program as favorite, and update local copy"""
